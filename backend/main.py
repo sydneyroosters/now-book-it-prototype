@@ -4,6 +4,7 @@ NBI No-Show Prediction Engine — FastAPI Application
 
 from fastapi import FastAPI, BackgroundTasks, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
 import database
@@ -13,7 +14,7 @@ import memory as mem
 import agent
 import json
 from datetime import datetime, date, timedelta
-from typing import Optional
+from typing import Optional, Literal
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
     weather_map = await weather_module.get_sydney_weather()
     data_generator.pre_score_upcoming_bookings(weather_map)
     print("Upcoming bookings pre-scored")
+
 
     print("\nNBI API running at http://localhost:8000")
     print("Docs at http://localhost:8000/docs\n")
@@ -188,6 +190,29 @@ async def score_booking(booking_id: str):
         "risk_result": risk,
         "reasoning_steps": result["reasoning_steps"]
     }
+
+
+# ---------------------------------------------------------------------------
+# Outcome recording (feedback loop)
+# ---------------------------------------------------------------------------
+
+class OutcomeRequest(BaseModel):
+    outcome: Literal["completed", "no_show", "cancelled"]
+    notes: str = ""
+
+
+@app.post("/bookings/{booking_id}/outcome", tags=["Bookings"])
+def record_booking_outcome(booking_id: str, body: OutcomeRequest):
+    """Record the actual outcome of a booking. Updates both SQLite and ChromaDB vector memory."""
+    b = database.get_booking(booking_id)
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    conn = database.get_connection()
+    database.record_outcome(conn, booking_id, body.outcome, body.notes)
+    conn.close()
+    if booking_memory:
+        booking_memory.update_outcome_in_memory(booking_id, body.outcome)
+    return {"status": "recorded", "booking_id": booking_id, "outcome": body.outcome}
 
 
 # ---------------------------------------------------------------------------
@@ -368,7 +393,10 @@ async def dashboard_weather_impact(
     Powers the real-time weather impact strip on the frontend.
     Refreshes weather from Open-Meteo every hour.
     """
-    weather_map = await weather_module.get_sydney_weather(lat, lon)
+    try:
+        weather_map = await weather_module.get_sydney_weather(lat, lon)
+    except Exception:
+        weather_map = {}
     today = datetime.now().date()
     result = []
 
@@ -435,4 +463,4 @@ def dashboard_at_risk():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, reload_excludes=["venv/*", "chroma_db/*", "*.db"])
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

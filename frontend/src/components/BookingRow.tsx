@@ -1,7 +1,6 @@
-import { Phone, MessageSquare, Send, Sparkles, Loader2, Mail, PhoneCall, Gift } from "lucide-react";
+import { Phone, MessageSquare, Send, Mail, PhoneCall } from "lucide-react";
 import type { Booking } from "@/data/bookings";
 import RiskBadge from "./RiskBadge";
-import { useScoreBooking } from "@/hooks/useBookings";
 
 interface BookingRowProps {
   booking: Booking;
@@ -14,6 +13,8 @@ const statusStyles: Record<string, string> = {
   "offer-sent": "text-primary",
   unconfirmed: "text-risk-medium",
   cancelled: "text-muted-foreground line-through",
+  no_show: "text-risk-high",
+  completed: "text-risk-low",
 };
 
 const statusLabels: Record<string, string> = {
@@ -22,13 +23,25 @@ const statusLabels: Record<string, string> = {
   "offer-sent": "Offer Sent",
   unconfirmed: "Unconfirmed",
   cancelled: "Cancelled",
+  no_show: "No-Show",
+  completed: "Completed",
 };
 
 const BookingRow = ({ booking, onSendOffer }: BookingRowProps) => {
   const isActionable = booking.status === "unconfirmed";
   const isNonLowRisk = booking.riskLevel !== "low";
-  const isUnscored = booking.riskScore === 0 && !booking.riskFactors.some(f => f.includes("history") || f.includes("visits"));
-  const { mutate: scoreBooking, isPending: isScoring } = useScoreBooking();
+
+  // Extra context signals
+  const remindersIgnored = (booking as any).reminders_ignored ?? 0;
+  const depositAmount = (booking as any).deposit_amount ?? 0;
+  const occasion = (booking as any).occasion;
+  const tier = (booking as any).tier;
+
+  const extraSignals: string[] = [];
+  if (remindersIgnored > 0) extraSignals.push(`${remindersIgnored} reminder${remindersIgnored > 1 ? "s" : ""} ignored`);
+  if (depositAmount > 0) extraSignals.push(`$${depositAmount.toFixed(0)} deposit`);
+  if (occasion && occasion !== "general") extraSignals.push(occasion.replace(/_/g, " "));
+  if (tier === "fine_dining") extraSignals.push("fine dining");
 
   return (
     <div className="group flex items-center px-5 py-3.5 hover:bg-muted/50 transition-colors border-b border-border">
@@ -57,12 +70,30 @@ const BookingRow = ({ booking, onSendOffer }: BookingRowProps) => {
         )}
       </div>
 
-      {/* Risk badge */}
-      <div className="w-32 shrink-0">
+      {/* Risk badge with reasoning tooltip */}
+      <div className="w-32 shrink-0 relative group/risk">
         <RiskBadge level={booking.riskLevel} score={booking.riskScore} />
+        {booking.riskFactors.length > 0 && (
+          <div className="absolute left-0 top-full mt-1.5 z-40 hidden group-hover/risk:block w-64 bg-popover border border-border rounded-lg shadow-xl p-3 pointer-events-none">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Risk Signals</div>
+            <ul className="space-y-1 mb-2">
+              {booking.riskFactors.map((f) => (
+                <li key={f} className="text-xs text-foreground flex items-start gap-1.5">
+                  <span className="text-risk-high mt-0.5">·</span>{f}
+                </li>
+              ))}
+            </ul>
+            {(booking as any).recommended_action && (
+              <>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Recommended Action</div>
+                <p className="text-xs text-foreground">{(booking as any).recommended_action}</p>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Risk factors */}
+      {/* Risk factors + extra signals */}
       <div className="flex-1 min-w-0 flex flex-wrap gap-1 pr-4">
         {booking.riskFactors.map((factor) => (
           <span
@@ -72,20 +103,20 @@ const BookingRow = ({ booking, onSendOffer }: BookingRowProps) => {
             {factor}
           </span>
         ))}
+        {extraSignals.map((sig) => (
+          <span
+            key={sig}
+            className="text-[11px] text-primary/70 bg-primary/5 border border-primary/10 px-1.5 py-0.5 rounded whitespace-nowrap"
+          >
+            {sig}
+          </span>
+        ))}
       </div>
 
       {/* Actions */}
-      <div className="w-52 shrink-0 flex justify-end gap-1.5">
-        {isUnscored && (
-          <button
-            onClick={() => scoreBooking(booking.id)}
-            disabled={isScoring}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap bg-primary/10 text-primary border border-primary/20 rounded-md shadow-sm hover:bg-primary/20 transition-colors disabled:opacity-50"
-          >
-            {isScoring ? <Loader2 className="w-3 h-3 shrink-0 animate-spin" /> : <Sparkles className="w-3 h-3 shrink-0" />}
-            {isScoring ? "Scoring…" : "AI Score"}
-          </button>
-        )}
+      <div className="w-56 shrink-0 flex justify-end gap-1.5 items-center">
+
+        {/* Call / SMS / Send Offer */}
         {isActionable && isNonLowRisk ? (
           <>
             <button className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap bg-card border border-border rounded-md shadow-sm hover:bg-muted transition-colors">

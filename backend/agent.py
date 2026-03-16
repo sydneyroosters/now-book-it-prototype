@@ -65,6 +65,30 @@ TOOLS = [
         }
     },
     {
+        "name": "get_restaurant_profile",
+        "description": "Get this restaurant's historical no-show rates by occasion type. Use this when the occasion is specific (birthday, anniversary, business_dinner) or when you want to know if this venue has a structurally high no-show rate for this type of booking.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "restaurant_id": {"type": "string", "description": "The restaurant ID"},
+                "occasion": {"type": "string", "description": "The booking occasion for context"}
+            },
+            "required": ["restaurant_id"]
+        }
+    },
+    {
+        "name": "get_guest_cancellation_patterns",
+        "description": "Retrieve timing and frequency patterns of past cancellations and no-shows for this guest. Use this for any guest with prior history to detect chronic no-show or last-minute cancellation patterns.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "guest_name": {"type": "string", "description": "Full name of the guest"},
+                "phone": {"type": "string", "description": "Guest phone number"}
+            },
+            "required": ["guest_name", "phone"]
+        }
+    },
+    {
         "name": "submit_risk_assessment",
         "description": "Submit the final risk assessment. Call this when you have enough information to make a confident prediction.",
         "input_schema": {
@@ -114,8 +138,9 @@ Your reasoning process:
 2. Get the weather for the booking date — rain and extreme heat spike no-shows
 3. Check the slot history — some time slots are structurally riskier
 4. Look for similar past cases — pattern matching improves accuracy
-5. Weigh all signals together — no single signal is definitive
-6. Submit your assessment with specific, actionable recommendations
+5. For non-trivial bookings, check restaurant profile and guest cancellation patterns for extra precision
+6. Weigh all signals together — no single signal is definitive
+7. Submit your assessment with specific, actionable recommendations
 
 Risk score guide:
 - 0-25: Low — standard reminder only
@@ -129,6 +154,30 @@ Confirmation method rules — ALWAYS apply these adjustments:
 - Email confirmation: reduce score by 14-18 points. Acknowledged the booking — meaningfully reduces risk.
 - No confirmation: add 8-12 points. Unresponsive guests are significantly more likely to no-show.
 These reductions apply on top of all other factors. A high-risk archetype who confirmed via phone should rarely exceed medium risk.
+
+Reminder response rules:
+- Each reminder ignored adds +8 to risk score. A guest who ignores 2+ reminders is showing disengagement.
+
+Occasion adjustments:
+- birthday / anniversary: -5 (personal milestone — high commitment to attend)
+- work_function / business_dinner: +5 (plans change, corporate bookings cancel more)
+
+Deposit adequacy (per head = deposit_amount / party_size):
+- >$50/head: -10 (strong financial commitment)
+- $20-50/head: -5 (moderate commitment)
+- <$20/head or no deposit: no reduction
+
+Restaurant tier adjustments:
+- fine_dining: -5 (guests self-select; investment in the occasion is high)
+- fast_casual / casual: +5 (lower barrier to booking, lower commitment signal)
+
+Venue history (from get_restaurant_profile):
+- If the occasion no-show rate at this restaurant exceeds 20%: +10
+
+Guest cancellation patterns (from get_guest_cancellation_patterns):
+- Pattern = "chronic" (3+ no-shows): +20
+- Pattern = "unreliable" (1-2 no-shows or 2+ last-minute cancels): +15
+- last_minute_count >= 2: add an additional +8
 
 Be specific. "Send a confirmation SMS by 3pm today" is useful. "Follow up with guest" is not.
 Always quantify revenue at risk (party_size × avg_spend)."""
@@ -144,18 +193,28 @@ async def score_booking(booking_id: str, memory_instance=None) -> dict:
     if not booking:
         raise ValueError(f"Booking {booking_id} not found")
 
+    deposit_per_head = (
+        round(booking.get('deposit_amount', 0) / booking['party_size'], 2)
+        if booking.get('deposit_paid') and booking['party_size'] > 0 else 0
+    )
     booking_context = f"""
 Booking to assess:
 - Booking ID: {booking['id']}
 - Restaurant: {booking.get('restaurant_name', 'Unknown')} ({booking.get('restaurant_suburb', '')})
+- Restaurant tier: {booking.get('tier', 'casual')}
+- Restaurant ID: {booking['restaurant_id']}
 - Date: {booking['booking_date']} at {booking['booking_time']}
 - Party size: {booking['party_size']}
 - Guest ID: {booking['guest_id']}
+- Guest name: {booking.get('guest_name', 'Unknown')}
+- Guest phone: {booking.get('guest_phone', '')}
+- Guest notes: {booking.get('guest_notes') or 'none'}
+- Guest historical avg spend: ${booking.get('total_spend', 0):.0f} total
 - Occasion: {booking.get('occasion', 'general')}
-- Deposit paid: {booking.get('deposit_paid', False)}
+- Deposit paid: {bool(booking.get('deposit_paid', False))} (${booking.get('deposit_amount', 0):.2f} total, ${deposit_per_head:.2f}/head)
 - Booking channel: {booking.get('booking_channel', 'online')}
 - Lead time: {booking.get('lead_time_hours', 0)} hours
-- Confirmed response: {booking.get('confirmed_response', False)}
+- Confirmed response: {bool(booking.get('confirmed_response', False))}
 - Confirmation method: {booking.get('confirmation_method') or 'none'}
 - Reminders sent: {booking.get('reminders_sent', 0)}, ignored: {booking.get('reminders_ignored', 0)}
 - Restaurant avg spend: ${booking.get('avg_spend', 80)} per person
@@ -230,6 +289,29 @@ Please assess the no-show risk for this booking.
                     step_summary = (
                         f"Slot history: {tool_result.get('noshow_rate_pct', 0):.1f}% "
                         f"no-show rate for this slot"
+                    )
+
+                elif tool_name == "get_restaurant_profile":
+                    conn = database.get_connection()
+                    tool_result = database.get_restaurant_noshow_rate(conn, tool_input["restaurant_id"])
+                    conn.close()
+                    occasion = tool_input.get("occasion", "")
+                    occasion_rate = tool_result.get(occasion, {}).get("noshow_rate", 0) if occasion else 0
+                    step_summary = (
+                        f"Restaurant no-show profile: {len(tool_result)} occasions tracked"
+                        + (f", {occasion} rate={occasion_rate}%" if occasion else "")
+                    )
+
+                elif tool_name == "get_guest_cancellation_patterns":
+                    conn = database.get_connection()
+                    tool_result = database.get_guest_cancellation_patterns(
+                        conn, tool_input["guest_name"], tool_input.get("phone", "")
+                    )
+                    conn.close()
+                    step_summary = (
+                        f"Guest pattern: {tool_result.get('pattern', 'unknown')}, "
+                        f"{tool_result.get('noshow_count', 0)} no-shows, "
+                        f"{tool_result.get('last_minute_count', 0)} last-minute"
                     )
 
                 elif tool_name == "get_similar_past_cases":

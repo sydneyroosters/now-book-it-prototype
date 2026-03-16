@@ -20,7 +20,25 @@ class BookingMemory:
             metadatas=[{"outcome": outcome, "risk_score": risk_score}]
         )
 
-    def get_similar_cases(self, booking_summary: str, n: int = 3) -> list:
+    def update_outcome_in_memory(self, booking_id: str, outcome: str):
+        """Update the outcome label in ChromaDB when the real outcome is recorded."""
+        try:
+            existing = self.collection.get(ids=[booking_id])
+            if not existing["ids"]:
+                return
+            doc = existing["documents"][0]
+            meta = existing["metadatas"][0]
+            # Rewrite document with updated outcome prefix
+            doc_without_prefix = doc
+            if doc.startswith("[OUTCOME:"):
+                doc_without_prefix = doc[doc.index("]") + 2:]
+            updated_doc = f"[OUTCOME: {outcome}] {doc_without_prefix}"
+            meta["outcome"] = outcome
+            self.collection.upsert(ids=[booking_id], documents=[updated_doc], metadatas=[meta])
+        except Exception:
+            pass
+
+    def get_similar_cases(self, booking_summary: str, n: int = 5) -> list:
         count = self.collection.count()
         if count == 0:
             return []
@@ -72,7 +90,11 @@ class BookingMemory:
             except Exception:
                 day_name = "Unknown"
 
+            outcome = "no_show" if status == "no_show" else "showed_up"
+            risk_score = 80 if status == "no_show" else 20
+
             summary = (
+                f"[OUTCOME: {outcome}] "
                 f"{'New guest' if total_bookings <= 2 else f'Returning guest with {total_bookings} visits'}, "
                 f"{noshow_rate:.0f}% no-show rate, "
                 f"{day_name} {btime}, party of {party_size}, "
@@ -81,8 +103,5 @@ class BookingMemory:
                 f"{occasion} occasion, {suburb} venue ({tier}), "
                 f"tags: {', '.join(tags) if tags else 'none'}"
             )
-
-            outcome = "no_show" if status == "no_show" else "showed_up"
-            risk_score = 80 if status == "no_show" else 20
 
             self.store_outcome(bid, summary, outcome, risk_score)

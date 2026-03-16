@@ -65,7 +65,7 @@ export default function WeatherRiskBar({
   if (lon != null) params.set("lon", String(lon));
   if (restaurantId) params.set("restaurant_id", restaurantId);
 
-  const { data, isLoading, isFetching, dataUpdatedAt } = useQuery<DayImpact[]>({
+  const { data, isFetching, dataUpdatedAt } = useQuery<DayImpact[]>({
     queryKey: ["weather-impact", lat, lon, restaurantId],
     queryFn: async () => {
       const res = await fetch(`${API_BASE_URL}/dashboard/weather-impact?${params}`);
@@ -74,6 +74,7 @@ export default function WeatherRiskBar({
     },
     refetchInterval: 30_000,
     staleTime: 25_000,
+    retry: 1,
   });
 
   // Bubble fetching state up so parent can show a loader
@@ -81,7 +82,7 @@ export default function WeatherRiskBar({
     onFetchingChange?.(isFetching);
   }, [isFetching]);
 
-  if (isLoading || !data) {
+  if (!data) {
     return <div className="h-24 bg-card rounded-lg border border-border animate-pulse mb-4" />;
   }
 

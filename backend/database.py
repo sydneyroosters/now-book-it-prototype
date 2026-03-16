@@ -38,9 +38,17 @@ def init_db():
         reminders_ignored INTEGER DEFAULT 0, lead_time_hours REAL DEFAULT 24,
         status TEXT DEFAULT 'upcoming', created_at TEXT,
         risk_score INTEGER, risk_level TEXT, risk_reasons TEXT, recommended_action TEXT,
+        outcome_notes TEXT, cancelled_at TIMESTAMP,
         FOREIGN KEY (restaurant_id) REFERENCES restaurants(id),
         FOREIGN KEY (guest_id) REFERENCES guests(id)
     )""")
+
+    # Migrate existing tables: add columns if they don't exist yet
+    existing_cols = {row[1] for row in c.execute("PRAGMA table_info(bookings)").fetchall()}
+    if "outcome_notes" not in existing_cols:
+        c.execute("ALTER TABLE bookings ADD COLUMN outcome_notes TEXT")
+    if "cancelled_at" not in existing_cols:
+        c.execute("ALTER TABLE bookings ADD COLUMN cancelled_at TIMESTAMP")
 
     c.execute("""CREATE TABLE IF NOT EXISTS prediction_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT, booking_id TEXT,
@@ -180,6 +188,77 @@ def get_accuracy_stats() -> dict:
         "overall_accuracy": round(correct / total * 100, 1) if total > 0 else None,
         "by_risk_level": by_level
     }
+
+
+def get_restaurant_noshow_rate(conn, restaurant_id: str) -> dict:
+    """Returns historical no-show rates by occasion for a restaurant."""
+    rows = conn.execute("""
+        SELECT occasion,
+               COUNT(*) as total,
+               SUM(CASE WHEN status='no_show' THEN 1 ELSE 0 END) as noshows
+        FROM bookings
+        WHERE restaurant_id = ? AND status IN ('confirmed', 'no_show', 'completed')
+        GROUP BY occasion
+    """, (restaurant_id,)).fetchall()
+    result = {}
+    for r in rows:
+        total = r["total"]
+        if total > 0:
+            result[r["occasion"]] = {
+                "total": total,
+                "noshows": r["noshows"],
+                "noshow_rate": round(r["noshows"] / total * 100, 1)
+            }
+    return result
+
+
+def get_guest_cancellation_patterns(conn, guest_name: str, phone: str) -> dict:
+    """Returns timing and frequency of past cancellations/no-shows for a guest."""
+    rows = conn.execute("""
+        SELECT status, booking_date, booking_time, lead_time_hours, cancelled_at
+        FROM bookings
+        WHERE (guest_name_lookup IS NOT NULL OR 1=1)
+        AND id IN (
+            SELECT b.id FROM bookings b
+            JOIN guests g ON b.guest_id = g.id
+            WHERE g.name = ? OR g.phone = ?
+        )
+        AND status IN ('no_show', 'cancelled', 'completed')
+        ORDER BY booking_date DESC LIMIT 20
+    """, (guest_name, phone)).fetchall()
+
+    noshow_count = sum(1 for r in rows if r["status"] == "no_show")
+    cancelled_count = sum(1 for r in rows if r["status"] == "cancelled")
+    total = len(rows)
+
+    # Estimate last-minute cancels: lead_time_hours < 24
+    last_minute = sum(
+        1 for r in rows
+        if r["status"] in ("no_show", "cancelled") and (r["lead_time_hours"] or 999) < 24
+    )
+
+    return {
+        "total_history": total,
+        "noshow_count": noshow_count,
+        "cancelled_count": cancelled_count,
+        "last_minute_count": last_minute,
+        "noshow_rate_pct": round(noshow_count / total * 100, 1) if total > 0 else 0,
+        "pattern": (
+            "chronic" if noshow_count >= 3 else
+            "unreliable" if noshow_count >= 1 or last_minute >= 2 else
+            "reliable"
+        )
+    }
+
+
+def record_outcome(conn, booking_id: str, outcome: str, notes: str = ""):
+    """Record the actual outcome of a booking after the event."""
+    cancelled_at = datetime.now().isoformat() if outcome == "cancelled" else None
+    conn.execute(
+        "UPDATE bookings SET status=?, outcome_notes=?, cancelled_at=? WHERE id=?",
+        (outcome, notes, cancelled_at, booking_id)
+    )
+    conn.commit()
 
 
 def get_historical_slot_stats(hour: int, day_of_week: int, restaurant_id: str) -> dict:

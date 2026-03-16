@@ -31,9 +31,12 @@ async def get_sydney_weather(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON)
         "forecast_days": 7
     }
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, params=params, timeout=10)
-        data = response.json()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, timeout=5)
+            data = response.json()
+    except Exception:
+        return _weather_cache.get(key, {})
 
     result = {}
     daily = data.get("daily", {})

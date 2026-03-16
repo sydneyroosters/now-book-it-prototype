@@ -25,6 +25,7 @@ const NoShowPredictor = () => {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [venueOpen, setVenueOpen] = useState(false);
   const [isChangingVenue, setIsChangingVenue] = useState(false);
+  const hasLoadedOnce = useRef(false);
   const venueRef = useRef<HTMLDivElement>(null);
   const now = useNow();
 
@@ -158,19 +159,21 @@ const NoShowPredictor = () => {
         7-day bookings ranked by no-show risk. Weather updates every 30 seconds.
       </p>
 
-      {/* Content area — fade + overlay while switching venue */}
-      <div className={`relative transition-opacity duration-300 ${isChangingVenue ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
-        {isChangingVenue && (
-          <div className="absolute inset-0 z-10 flex items-start justify-center pt-24">
-            <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2.5 shadow-md text-sm text-muted-foreground">
-              <svg className="w-4 h-4 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
-              </svg>
-              Loading {selectedRestaurant?.name}…
-            </div>
+      {/* Loading overlay — sits above the faded content */}
+      {isChangingVenue && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2.5 shadow-lg text-sm text-muted-foreground">
+            <svg className="w-4 h-4 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+            </svg>
+            Loading {selectedRestaurant?.name}…
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Content area — fade while switching venue */}
+      <div className={`relative transition-opacity duration-300 ${isChangingVenue ? "opacity-40 pointer-events-none" : "opacity-100"}`}>
 
       {/* Weather + risk impact bar */}
       <WeatherRiskBar
@@ -179,7 +182,13 @@ const NoShowPredictor = () => {
         lat={selectedRestaurant?.lat}
         lon={selectedRestaurant?.lon}
         restaurantId={selectedRestaurant?.id}
-        onFetchingChange={setIsChangingVenue}
+        onFetchingChange={(fetching) => {
+          if (!hasLoadedOnce.current) {
+            if (!fetching) hasLoadedOnce.current = true;
+            return;
+          }
+          setIsChangingVenue(fetching);
+        }}
       />
 
       {/* Alert bar */}
@@ -241,7 +250,11 @@ const NoShowPredictor = () => {
         </div>
 
         {filtered.map((booking) => (
-          <BookingRow key={booking.id} booking={booking} onSendOffer={setOfferBooking} />
+          <BookingRow
+            key={booking.id}
+            booking={booking}
+            onSendOffer={setOfferBooking}
+          />
         ))}
 
         {filtered.length === 0 && (
@@ -260,6 +273,8 @@ const NoShowPredictor = () => {
           onSend={handleSendOffer}
         />
       )}
+
+
     </div>
   );
 };

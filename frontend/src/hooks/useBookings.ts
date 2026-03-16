@@ -34,6 +34,7 @@ interface BackendBooking {
   booking_date: string;
   booking_time: string;
   guest_name: string;
+  guest_phone: string;
   party_size: number;
   booking_channel: string;
   status: string;
@@ -43,15 +44,20 @@ interface BackendBooking {
   recommended_action: string | null;
   guest_tags: string | null;
   deposit_paid: number;
+  deposit_amount: number;
   confirmed_response: number;
   confirmation_method: string | null;
+  reminders_sent: number;
+  reminders_ignored: number;
   occasion: string;
   restaurant_id: string;
   restaurant_name: string;
   avg_spend: number;
+  tier: string;
   total_bookings: number;
   total_noshows: number;
   vip: number;
+  guest_notes: string | null;
 }
 
 function mapStatus(backendStatus: string, confirmedResponse: number): Booking["status"] {
@@ -92,6 +98,14 @@ declare module "@/data/bookings" {
     booking_date?: string;
     restaurant_id?: string;
     confirmation_method?: "email" | "sms" | "phone" | null;
+    reminders_sent?: number;
+    reminders_ignored?: number;
+    deposit_amount?: number;
+    occasion?: string;
+    avg_spend?: number;
+    tier?: string;
+    guest_notes?: string | null;
+    recommended_action?: string | null;
   }
 }
 
@@ -110,7 +124,7 @@ function toFrontendBooking(b: BackendBooking): Booking {
     guestName: b.guest_name,
     covers: b.party_size,
     table: "-",
-    phone: "",
+    phone: b.guest_phone ?? "",
     riskLevel: mapRiskLevel(b.risk_level),
     riskScore: b.risk_score ?? 0,
     riskFactors,
@@ -120,6 +134,14 @@ function toFrontendBooking(b: BackendBooking): Booking {
     booking_date: b.booking_date,
     restaurant_id: b.restaurant_id,
     confirmation_method: b.confirmation_method as any,
+    reminders_sent: b.reminders_sent,
+    reminders_ignored: b.reminders_ignored,
+    deposit_amount: b.deposit_amount,
+    occasion: b.occasion,
+    avg_spend: b.avg_spend,
+    tier: b.tier,
+    guest_notes: b.guest_notes,
+    recommended_action: b.recommended_action,
   } as Booking;
 }
 
@@ -153,10 +175,32 @@ export function useBookings() {
   });
 }
 
+export interface ReasoningStep {
+  tool: string;
+  input: Record<string, unknown>;
+  output_summary: string;
+}
+
+export interface ScoringResult {
+  booking_id: string;
+  risk_result: {
+    risk_score: number;
+    risk_level: string;
+    top_reasons: string[];
+    positive_factors: string[];
+    recommended_action: string;
+    follow_up_action?: string;
+    best_contact_time?: string;
+    confidence: number;
+    revenue_at_risk: number;
+  };
+  reasoning_steps: ReasoningStep[];
+}
+
 export function useScoreBooking() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<ScoringResult, Error, string>({
     mutationFn: async (bookingId: string) => {
       const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}/score`, {
         method: "POST",
@@ -167,5 +211,21 @@ export function useScoreBooking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bookings"] });
     },
+  });
+}
+
+export function useRecordOutcome() {
+  return useMutation({
+    mutationFn: async ({ bookingId, outcome, notes = "" }: { bookingId: string; outcome: string; notes?: string }) => {
+      const response = await fetch(`${API_BASE_URL}/bookings/${bookingId}/outcome`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outcome, notes }),
+      });
+      if (!response.ok) throw new Error("Failed to record outcome");
+      return response.json();
+    },
+    // No auto-refetch: the booking disappears from get_upcoming_bookings after status changes.
+    // The caller updates local state directly instead.
   });
 }
