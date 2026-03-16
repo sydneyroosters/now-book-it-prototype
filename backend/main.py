@@ -44,16 +44,23 @@ async def lifespan(app: FastAPI):
     print("Sample data ready")
 
     # 3. Seed ChromaDB vector memory
-    booking_memory = mem.BookingMemory()
-    conn = database.get_connection()
-    booking_memory.seed_from_historical_bookings(conn)
-    conn.close()
-    print("Vector memory seeded")
+    try:
+        booking_memory = mem.BookingMemory()
+        conn = database.get_connection()
+        booking_memory.seed_from_historical_bookings(conn)
+        conn.close()
+        print("Vector memory seeded")
+    except Exception as e:
+        print(f"WARNING: Vector memory unavailable ({e}) — continuing without it")
+        booking_memory = None
 
     # 4. Pre-score upcoming bookings with weather-aware rule engine
-    weather_map = await weather_module.get_sydney_weather()
-    data_generator.pre_score_upcoming_bookings(weather_map)
-    print("Upcoming bookings pre-scored")
+    try:
+        weather_map = await weather_module.get_sydney_weather()
+        data_generator.pre_score_upcoming_bookings(weather_map)
+        print("Upcoming bookings pre-scored")
+    except Exception as e:
+        print(f"WARNING: Pre-scoring skipped ({e})")
 
 
     print("\nNBI API running at http://localhost:8000")
