@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta
 import os
 
-DB_PATH = os.getenv("DB_PATH", "/data/nbi.db")
+DB_PATH = os.getenv("DB_PATH", "/tmp/nbi.db")
 
 
 def get_connection():
