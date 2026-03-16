@@ -36,12 +36,18 @@ async def lifespan(app: FastAPI):
     print("Starting NBI No-Show Prediction Engine...")
 
     # 1. Initialise database schema
-    database.init_db()
-    print("Database initialised")
+    try:
+        database.init_db()
+        print("Database initialised")
+    except Exception as e:
+        print(f"WARNING: Database init failed ({e})")
 
     # 2. Seed sample data (no-op if already populated)
-    data_generator.generate_sample_data()
-    print("Sample data ready")
+    try:
+        data_generator.generate_sample_data()
+        print("Sample data ready")
+    except Exception as e:
+        print(f"WARNING: Sample data generation failed ({e})")
 
     # 3. Seed ChromaDB vector memory
     try:
