@@ -193,18 +193,14 @@ const NoShowPredictor = () => {
 
       {/* Alert bar */}
       {highRiskCount > 0 && (
-        <div className="flex items-center justify-between bg-risk-high-bg border border-risk-high/20 rounded-lg px-4 py-3 mb-4">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-risk-high" />
-            <span className="text-sm text-risk-high font-medium">
-              {highRiskCount} high-risk booking{highRiskCount > 1 ? "s" : ""} requiring attention
-            </span>
-          </div>
-          {atRiskRevenue > 0 && (
-            <span className="text-sm font-semibold text-risk-high">
-              ${atRiskRevenue.toLocaleString()} at risk
-            </span>
-          )}
+        <div className="flex items-center bg-risk-high-bg border border-risk-high/20 rounded-lg px-4 py-3 mb-4">
+          <AlertTriangle className="w-4 h-4 text-risk-high shrink-0" />
+          <span className="text-sm text-risk-high font-medium ml-2">
+            {highRiskCount} high-risk booking{highRiskCount > 1 ? "s" : ""} requiring attention
+            {atRiskRevenue > 0 && (
+              <span className="font-semibold">. ${atRiskRevenue.toLocaleString()} at risk</span>
+            )}
+          </span>
         </div>
       )}
 

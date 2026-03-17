@@ -239,10 +239,7 @@ const OfferDialog = ({ booking, open, onClose, onSend }: OfferDialogProps) => {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-muted/30 rounded-b-xl">
-          <p className="text-xs text-muted-foreground">
-            Offer will be sent via SMS to {booking.phone}
-          </p>
+        <div className="flex items-center justify-end px-6 py-4 border-t border-border bg-muted/30 rounded-b-xl">
           <div className="flex gap-2">
             <button
               onClick={onClose}
