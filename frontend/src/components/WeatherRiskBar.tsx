@@ -86,7 +86,7 @@ export default function WeatherRiskBar({
     return <div className="h-24 bg-card rounded-lg border border-border animate-pulse mb-4" />;
   }
 
-  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }) : null;
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney" }) : null;
 
   return (
     <div className="mb-4">

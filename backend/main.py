@@ -14,8 +14,13 @@ import memory as mem
 import agent
 import json
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 from typing import Optional, Literal
 from dotenv import load_dotenv
+
+_SYDNEY = ZoneInfo("Australia/Sydney")
+def _sydney_today() -> date:
+    return datetime.now(tz=_SYDNEY).date()
 
 load_dotenv()
 
@@ -135,7 +140,7 @@ def get_restaurant(restaurant_id: str):
 
 
 @app.get("/restaurants/{restaurant_id}/bookings", tags=["Restaurants"])
-def restaurant_bookings(restaurant_id: str, days_ahead: int = 7):
+def restaurant_bookings(restaurant_id: str, days_ahead: int = 28):
     return database.get_upcoming_bookings(days_ahead=days_ahead, restaurant_id=restaurant_id)
 
 
@@ -145,7 +150,7 @@ def restaurant_bookings(restaurant_id: str, days_ahead: int = 7):
 
 @app.get("/bookings", tags=["Bookings"])
 def list_bookings(
-    days_ahead: int = 7,
+    days_ahead: int = 28,
     restaurant_id: Optional[str] = None,
     risk_level: Optional[str] = None,
     date: Optional[str] = None
@@ -363,7 +368,7 @@ async def get_weather_date(date: str):
 @app.get("/dashboard/summary", tags=["Dashboard"])
 def dashboard_summary():
     """Today's booking summary: covers, risk breakdown, revenue at risk."""
-    today = datetime.now().date().isoformat()
+    today = _sydney_today().isoformat()
     bookings = database.get_upcoming_bookings(days_ahead=1)
     today_bookings = [b for b in bookings if b.get("booking_date") == today]
     covers = sum(b.get("party_size", 0) for b in today_bookings)
@@ -410,7 +415,7 @@ async def dashboard_weather_impact(
         weather_map = await weather_module.get_sydney_weather(lat, lon)
     except Exception:
         weather_map = {}
-    today = datetime.now().date()
+    today = _sydney_today()
     result = []
 
     for i in range(7):

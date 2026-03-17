@@ -47,8 +47,8 @@ const NoShowPredictor = () => {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const todayStr = now.toISOString().slice(0, 10);
-  const currentTimeStr = now.toTimeString().slice(0, 5); // "HH:MM"
+  const todayStr = now.toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" }); // YYYY-MM-DD in Sydney time
+  const currentTimeStr = now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Australia/Sydney" });
 
   useEffect(() => {
     if (data) setBookings(data);
@@ -146,9 +146,9 @@ const NoShowPredictor = () => {
         <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
           <Clock className="w-4 h-4" />
           <span>
-            {now.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}
+            {now.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: "Australia/Sydney" })}
             {" · "}
-            {now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" })}
+            {now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit", timeZone: "Australia/Sydney" })}
           </span>
         </div>
       </div>
@@ -235,9 +235,9 @@ const NoShowPredictor = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-card rounded-lg border border-border overflow-hidden shadow-sm">
-        <div className="flex items-center px-5 py-3 border-b border-border bg-muted/50">
-          <div className="w-16 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Time</div>
+      <div className="bg-card rounded-lg border border-border shadow-sm">
+        <div className="flex items-center px-5 py-3 border-b border-border bg-muted/50 rounded-t-lg">
+          <div className="w-20 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{filterDate === "all" ? "Date / Time" : "Time"}</div>
           <div className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Guest</div>
           <div className="w-24 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</div>
           <div className="w-32 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Risk</div>
@@ -250,6 +250,7 @@ const NoShowPredictor = () => {
             key={booking.id}
             booking={booking}
             onSendOffer={setOfferBooking}
+            showDate={filterDate === "all"}
           />
         ))}
 

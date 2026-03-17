@@ -1,7 +1,16 @@
 import sqlite3
 import json
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import os
+
+_SYDNEY = ZoneInfo("Australia/Sydney")
+
+def _sydney_now() -> datetime:
+    return datetime.now(tz=_SYDNEY)
+
+def _sydney_today_str() -> str:
+    return _sydney_now().date().isoformat()
 
 DB_PATH = os.getenv("DB_PATH", "/tmp/nbi.db")
 
@@ -95,8 +104,8 @@ def get_restaurant(restaurant_id: str) -> dict:
 
 def get_upcoming_bookings(days_ahead: int = 7, restaurant_id: str = None, risk_level: str = None) -> list:
     conn = get_connection()
-    today = datetime.now().date().isoformat()
-    end = (datetime.now().date() + timedelta(days=days_ahead)).isoformat()
+    today = _sydney_today_str()
+    end = (_sydney_now().date() + timedelta(days=days_ahead)).isoformat()
 
     query = """
         SELECT b.*, r.name as restaurant_name, r.suburb as restaurant_suburb,
@@ -156,7 +165,7 @@ def log_prediction(booking_id: str, risk_score: int, risk_level: str, confidence
     conn.execute(
         """INSERT INTO prediction_logs (booking_id, predicted_risk_score, predicted_risk_level,
            confidence, signals_used, created_at) VALUES (?,?,?,?,?,?)""",
-        (booking_id, risk_score, risk_level, confidence, signals_used, datetime.now().isoformat())
+        (booking_id, risk_score, risk_level, confidence, signals_used, _sydney_now().isoformat())
     )
     conn.commit()
     conn.close()
@@ -253,7 +262,7 @@ def get_guest_cancellation_patterns(conn, guest_name: str, phone: str) -> dict:
 
 def record_outcome(conn, booking_id: str, outcome: str, notes: str = ""):
     """Record the actual outcome of a booking after the event."""
-    cancelled_at = datetime.now().isoformat() if outcome == "cancelled" else None
+    cancelled_at = _sydney_now().isoformat() if outcome == "cancelled" else None
     conn.execute(
         "UPDATE bookings SET status=?, outcome_notes=?, cancelled_at=? WHERE id=?",
         (outcome, notes, cancelled_at, booking_id)

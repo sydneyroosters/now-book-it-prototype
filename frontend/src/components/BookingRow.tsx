@@ -5,6 +5,7 @@ import RiskBadge from "./RiskBadge";
 interface BookingRowProps {
   booking: Booking;
   onSendOffer: (booking: Booking) => void;
+  showDate?: boolean;
 }
 
 const statusStyles: Record<string, string> = {
@@ -27,7 +28,7 @@ const statusLabels: Record<string, string> = {
   completed: "Completed",
 };
 
-const BookingRow = ({ booking, onSendOffer }: BookingRowProps) => {
+const BookingRow = ({ booking, onSendOffer, showDate }: BookingRowProps) => {
   const isActionable = booking.status === "unconfirmed";
   const isNonLowRisk = booking.riskLevel !== "low";
 
@@ -46,7 +47,14 @@ const BookingRow = ({ booking, onSendOffer }: BookingRowProps) => {
   return (
     <div className="group flex items-center px-5 py-3.5 hover:bg-muted/50 transition-colors border-b border-border">
       {/* Time */}
-      <div className="w-16 shrink-0 tabular-nums text-sm font-medium text-foreground">{booking.time}</div>
+      <div className="w-20 shrink-0 tabular-nums">
+        {showDate && (
+          <div className="text-[11px] text-muted-foreground font-medium">
+            {new Date((booking as any).booking_date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}
+          </div>
+        )}
+        <div className="text-sm font-medium text-foreground">{booking.time}</div>
+      </div>
 
       {/* Guest info */}
       <div className="flex-1 min-w-0 pr-4">
@@ -74,7 +82,7 @@ const BookingRow = ({ booking, onSendOffer }: BookingRowProps) => {
       <div className="w-32 shrink-0 relative group/risk">
         <RiskBadge level={booking.riskLevel} score={booking.riskScore} />
         {booking.riskFactors.length > 0 && (
-          <div className="absolute left-0 top-full mt-1.5 z-40 hidden group-hover/risk:block w-64 bg-popover border border-border rounded-lg shadow-xl p-3 pointer-events-none">
+          <div className="absolute left-0 bottom-full mb-1.5 z-40 hidden group-hover/risk:block w-64 bg-popover border border-border rounded-lg shadow-xl p-3 pointer-events-none">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Risk Signals</div>
             <ul className="space-y-1 mb-2">
               {booking.riskFactors.map((f) => (

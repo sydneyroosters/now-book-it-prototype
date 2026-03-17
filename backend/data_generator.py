@@ -9,6 +9,12 @@ import json
 import random
 import uuid
 from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
+
+_SYDNEY = ZoneInfo("Australia/Sydney")
+
+def _sydney_today() -> date:
+    return datetime.now(tz=_SYDNEY).date()
 
 import database
 
@@ -132,7 +138,7 @@ def _random_date_between(start: date, end: date) -> date:
 
 
 def _random_past_date(days_back_min: int, days_back_max: int) -> date:
-    today = date.today()
+    today = _sydney_today()
     return today - timedelta(days=random.randint(days_back_min, days_back_max))
 
 
@@ -199,7 +205,7 @@ def _make_booking_id() -> str:
 def _build_guests(names_list) -> list:
     """Build 80 guest records across 7 archetypes."""
     guests = []
-    today = date.today()
+    today = _sydney_today()
     name_iter = iter(names_list)
 
     def next_name():
@@ -470,7 +476,7 @@ def _noshow_prob(archetype: str) -> bool:
 
 def _generate_historical_bookings(guests: list, all_restaurant_ids: list) -> list:
     """Generate 8-15 past bookings per guest across the last 12 months."""
-    today = date.today()
+    today = _sydney_today()
     one_year_ago = today - timedelta(days=365)
     yesterday = today - timedelta(days=1)
     bookings = []
@@ -537,7 +543,7 @@ def _generate_historical_bookings(guests: list, all_restaurant_ids: list) -> lis
 
 def _generate_upcoming_bookings(guests: list) -> list:
     """Generate 3-6 upcoming bookings per restaurant per day for the next 28 days."""
-    today = date.today()
+    today = _sydney_today()
     bookings = []
 
     # Build a guest pool for quick random selection
@@ -744,8 +750,8 @@ def pre_score_upcoming_bookings(weather_map: dict) -> None:
     Weather modifiers shift scores on rainy/extreme days.
     """
     conn = database.get_connection()
-    today = datetime.now().date().isoformat()
-    end = (datetime.now().date() + timedelta(days=28)).isoformat()
+    today = _sydney_today().isoformat()
+    end = (_sydney_today() + timedelta(days=28)).isoformat()
 
     rows = conn.execute("""
         SELECT b.id, b.booking_date, b.booking_time, b.party_size, b.deposit_paid,
