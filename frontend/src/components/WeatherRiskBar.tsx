@@ -27,7 +27,7 @@ interface DayImpact {
 function WeatherIcon({ condition, risk }: { condition: string; risk: string }) {
   const cls = "w-4 h-4";
   if (risk === "high" || condition.toLowerCase().includes("thunder")) return <Zap className={cls} />;
-  if (condition.toLowerCase().includes("rain") || condition.toLowerCase().includes("drizzle")) return <CloudRain className={cls} />;
+  if (condition.toLowerCase().includes("rain") || condition.toLowerCase().includes("drizzle") || condition.toLowerCase().includes("shower")) return <CloudRain className={cls} />;
   if (condition.toLowerCase().includes("wind")) return <Wind className={cls} />;
   if (condition.toLowerCase().includes("cloud") || condition.toLowerCase().includes("overcast")) return <Cloud className={cls} />;
   return <Sun className={cls} />;

@@ -1,7 +1,7 @@
 """
 NBI No-Show Prediction Engine — Sample Data Generator
 Generates 8 Sydney restaurants, 50 guests across 7 behavioural archetypes,
-historical bookings (past 12 months), and upcoming bookings (next 7 days).
+historical bookings (past 12 months), and upcoming bookings (next 28 days).
 """
 
 import sqlite3
@@ -536,14 +536,14 @@ def _generate_historical_bookings(guests: list, all_restaurant_ids: list) -> lis
 
 
 def _generate_upcoming_bookings(guests: list) -> list:
-    """Generate 3-6 upcoming bookings per restaurant per day for the next 7 days."""
+    """Generate 3-6 upcoming bookings per restaurant per day for the next 28 days."""
     today = date.today()
     bookings = []
 
     # Build a guest pool for quick random selection
     guest_pool = guests  # all guests can have upcoming bookings
 
-    for day_offset in range(7):
+    for day_offset in range(28):
         bdate = today + timedelta(days=day_offset)
         for restaurant in RESTAURANTS:
             num_bookings = random.randint(3, 6)
@@ -745,7 +745,7 @@ def pre_score_upcoming_bookings(weather_map: dict) -> None:
     """
     conn = database.get_connection()
     today = datetime.now().date().isoformat()
-    end = (datetime.now().date() + timedelta(days=7)).isoformat()
+    end = (datetime.now().date() + timedelta(days=28)).isoformat()
 
     rows = conn.execute("""
         SELECT b.id, b.booking_date, b.booking_time, b.party_size, b.deposit_paid,
